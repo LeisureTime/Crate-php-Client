@@ -14,7 +14,8 @@
 	     * @throws \InvalidArgumentException
 	     * @throws \RuntimeException
 	     */
-	    public function __construct(array $config){
+	    public function __construct( $config){
+		
 	        $this->_config = $config;
 	    }
 	 
@@ -42,7 +43,7 @@
   			 }
 		}
 		
-		$insertQry = '{"stmt":
+	echo	$insertQry = '{"stmt":
 			"insert into '.$table_name.' ('.implode($fields_array, ", ").') values ('.implode($placeHolder, ", ").')",
 			"args": ['.implode($data_array, ", ").']
 		}';
