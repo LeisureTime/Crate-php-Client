@@ -1,18 +1,14 @@
 <?php
 
-	
 	class Crate {
 
 	    private $_config = array();
 	    private $_state = null;
-	    private $_curl_handle = null;
-	    
-	    const API_BASE = '108.161.135.84:4200/_sql?pretty';
-	    
+	    private $_curl_handle = null;	    
+	    const API_BASE = '_sql?pretty';
+	    const SERVER = '108.161.135.84:4200/';
 	    /**
-	     * @param array $config (api_key, api_secret, callback_url)
-	     * @throws \InvalidArgumentException
-	     * @throws \RuntimeException
+	     * @param array $config 
 	     */
 	    public function __construct( $config){
 		
@@ -43,7 +39,7 @@
   			 }
 		}
 		
-	echo	$insertQry = '{"stmt":
+		$insertQry = '{"stmt":
 			"insert into '.$table_name.' ('.implode($fields_array, ", ").') values ('.implode($placeHolder, ", ").')",
 			"args": ['.implode($data_array, ", ").']
 		}';
@@ -59,93 +55,68 @@
 	   public function select_query(){
 	   
 	   }
-	   
-	   
-	    /**
-	     * Set the state manually. State is a unique identifier for the user
-	     * 
-	     * @param string $state
-	     * @throws \InvalidArgumentException
-	     * @return \LinkedIn\LinkedIn
-	     */
-	    public function setState($state){
-	        
-	        $state = trim($state);
-	        if (empty($state)){
-	            throw new \InvalidArgumentException('Invalid state. State should be a unique identifier for this user');
-	        }
-	        
-	        $this->_state = $state;
-	        
-	        return $this;
-	        
-	    }
-	    
-	    /**
-	     * Get state
-	     * 
-	     * @return string
-	     */
-	    public function getState(){
-	        
-	        return $this->_state;
-	        
-	    }
 	    
 	    /**
 	     * POST to an authenciated API endpoint w/ payload
 	     *
-	     * @param string $endpoint
 	     * @param array $payload
 	     * @return array
 	     */
-	    public function post($endpoint,  $payload){
+	    public function post($payload){
 	    	 
-	    	return $this->fetch($endpoint, $payload, 'POST');
+	    	return $this->fetch($payload, 'POST');
 	    	 
 	    }
 	     
 	    /**
 	     * GET an authenticated API endpoind w/ payload
 	     *
-	     * @param unknown_type $endpoint
 	     * @param array $payload
 	     * @return array
 	     */
-	    public function get($endpoint, $payload ){
+	    public function get($payload ){
 	    	 
-	    	return $this->fetch($endpoint, $payload);
+	    	return $this->fetch($payload);
 	    	 
 	    }
-	     
+	     		 
+		/**
+	     * Upload blob with file path and table.
+	     * @param array $file_path, $table
+	     * @return sha1 hax key
+	     */
+		 
+		 public function uploadBlob($file_path, $table){
+		 $sha1file = sha1_file($file_path);
+		 $this->put(self::SERVER.'_blobs/'.$table.'/'.$sha1file, $file_path);
+		 return $sha1file;
+		 }
+		 
+		 
 	    /**
 	     * PUT to an authenciated API endpoint w/ payload
 	     *
-	     * @param unknown_type $endpoint
 	     * @param array $payload
 	     * @return array
 	     */
-	    public function put($endpoint, $payload ){
-	    	 
-	    	return $this->fetch($endpoint, $payload, 'PUT');
-	    	 
+	     public function put($base, $payload ){
+	    	return $this->_makeRequest($base, $payload, "PUT",  $headers = array(),  $curl_options = array());	    	 
 	    }
 	    
 	    /**
-	     * Make an authenticated API request to the specified endpoint
+	     * Make an authenticated API request to the endpoint
 	     * Headers are for additional headers to be sent along with the request. 
 	     * Curl options are additional curl options that may need to be set
 	     * 
-	     * @param string $endpoint
 	     * @param array $payload
 	     * @param string $method
 	     * @param array $headers
 	     * @param array $curl_options
 	     * @return array 
 	     */
-	    public function fetch($endpoint,  $payload, $method = 'GET', array $headers = array(), array $curl_options = array()){
+	    public function fetch($payload, $method = 'GET', array $headers = array(), array $curl_options = array()){
 	        
-	        $endpoint = self::API_BASE;
+	        $endpoint = self::SERVER.self::API_BASE;
 	        $headers[] = 'x-li-format: json';
 	        
 	        return $this->_makeRequest($endpoint, $payload, $method, $headers, $curl_options);
@@ -177,30 +148,48 @@
 	    protected function _makeRequest($url,  $payload , $method = 'GET', array $headers = array(), array $curl_options = array()){
 
 	        $ch = $this->_getCurlHandle();
+			
+			if($method=='PUT'){
+				$filesize = filesize($payload);
+				$fh = fopen($payload, 'r');
+			
+				$options = array(
+					CURLOPT_CONNECTTIMEOUT => 2,
+					CURLOPT_BINARYTRANSFER => true,
+					CURLOPT_URL => $url,
+					CURLOPT_SSL_VERIFYPEER => false,
+					CURLOPT_HEADER => false
+				);
 
-	        $options = array(
-	        	CURLOPT_CUSTOMREQUEST => strtoupper($method),
-	        	CURLOPT_RETURNTRANSFER => true,
-	        	CURLOPT_URL => $url,
-	        	CURLOPT_HTTPHEADER => $headers,
-	        	CURLOPT_SSL_VERIFYPEER => false,
-	        	CURLOPT_FOLLOWLOCATION => true
-	        );
+				$options[CURLOPT_PUT] = true;
+				$options[CURLOPT_INFILE] = $fh;
+				$options[CURLOPT_INFILESIZE] = $filesize;
+			
+			
+			}else{			
+				$options = array(
+					CURLOPT_CUSTOMREQUEST => strtoupper($method),
+					CURLOPT_RETURNTRANSFER => true,
+					CURLOPT_URL => $url,
+					CURLOPT_HTTPHEADER => $headers,
+					CURLOPT_SSL_VERIFYPEER => false,
+					CURLOPT_FOLLOWLOCATION => true
+				);
 
-	        if (!empty($payload)){
-	            $options[CURLOPT_POST] = true;
-				$options[CURLOPT_POSTFIELDS] = $payload;
-	            $headers[] = 'Content-Length: ' . strlen($options[CURLOPT_POSTFIELDS]);
-	            $options[CURLOPT_HTTPHEADER] = $headers;
-	        }
+				if (!empty($payload)){
+					$options[CURLOPT_POST] = true;
+					$options[CURLOPT_POSTFIELDS] = $payload;
+					$headers[] = 'Content-Length: ' . strlen($options[CURLOPT_POSTFIELDS]);
+					$options[CURLOPT_HTTPHEADER] = $headers;
+				}
+			}
 	        
 	        if (!empty($curl_options)){
 	            $options = array_merge($options, $curl_options);
 	        }
-		
-
 	        curl_setopt_array($ch, $options);
 	        $response = curl_exec($ch);
+			if($method=='PUT') fclose($fh);
 			
 		   $this->_debug_info = curl_getinfo($ch);
 	        
